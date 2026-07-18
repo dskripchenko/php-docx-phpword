@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Dskripchenko\PhpDocxPhpWord\Internal;
 
 use Dskripchenko\PhpDocx\Document;
+use Dskripchenko\PhpDocx\Element\BlockElement;
 use Dskripchenko\PhpDocx\Element\Hyperlink;
 use Dskripchenko\PhpDocx\Element\Image;
+use Dskripchenko\PhpDocx\Element\InlineElement;
 use Dskripchenko\PhpDocx\Element\ImageFormat;
 use Dskripchenko\PhpDocx\Element\LineBreak;
 use Dskripchenko\PhpDocx\Element\ListItem as AstListItem;
@@ -69,7 +71,7 @@ final class FromPhpWordMapper
 
     /**
      * @param  AbstractElement[]  $elements
-     * @return list<object>
+     * @return list<BlockElement>
      */
     private function mapElements(array $elements): array
     {
@@ -150,7 +152,7 @@ final class FromPhpWordMapper
 
     /**
      * @param  AbstractElement[]  $elements
-     * @return list<object>
+     * @return list<InlineElement>
      */
     private function mapInline(array $elements): array
     {
@@ -177,7 +179,7 @@ final class FromPhpWordMapper
     {
         return new Hyperlink(
             $el->getSource(),
-            [new Run($el->getText() ?? '', $this->mapFont($el->getFontStyle()))],
+            [new Run($el->getText(), $this->mapFont($el->getFontStyle()))],
         );
     }
 
@@ -202,8 +204,8 @@ final class FromPhpWordMapper
             return null;
         }
         $style = $el->getStyle();
-        $wPt = is_numeric($style->getWidth()) ? (float) $style->getWidth() : 96.0;
-        $hPt = is_numeric($style->getHeight()) ? (float) $style->getHeight() : 96.0;
+        $wPt = (float) ($style?->getWidth() ?? 96.0);
+        $hPt = (float) ($style?->getHeight() ?? 96.0);
 
         return new Image($binary, $format, (int) round($wPt * 12700), (int) round($hPt * 12700));
     }
@@ -225,8 +227,8 @@ final class FromPhpWordMapper
     private function mapCell(Cell $cell): TableCell
     {
         $style = $cell->getStyle();
-        $gridSpan = (int) ($style->getGridSpan() ?? 1);
-        $vMerge = $style->getVMerge();
+        $gridSpan = (int) ($style?->getGridSpan() ?? 1);
+        $vMerge = $style?->getVMerge();
 
         return new TableCell(
             $this->mapElements($cell->getElements()),
@@ -239,7 +241,7 @@ final class FromPhpWordMapper
     }
 
     /**
-     * @param  list<array{depth: int, item: AstListItem, ordered: bool}>  $flat
+     * @param  non-empty-list<array{depth: int, item: AstListItem, ordered: bool}>  $flat
      */
     private function buildListTree(array $flat): ListNode
     {
@@ -278,7 +280,7 @@ final class FromPhpWordMapper
             $index++;
         }
 
-        return [$items, $index];
+        return [array_values($items), $index];
     }
 
     private function isOrderedListStyle(?ListItemStyle $style): bool
@@ -304,12 +306,12 @@ final class FromPhpWordMapper
         $size = $font->getSize();
 
         return new RunStyle(
-            sizeHalfPoints: is_numeric($size) ? (int) round((float) $size * 2) : null,
+            sizeHalfPoints: $size > 0 ? (int) round((float) $size * 2) : null,
             color: $this->normalizeColor($font->getColor()),
             fontFamily: $font->getName(),
             bold: (bool) $font->isBold(),
             italic: (bool) $font->isItalic(),
-            underline: $font->getUnderline() !== null && $font->getUnderline() !== Font::UNDERLINE_NONE,
+            underline: $font->getUnderline() !== Font::UNDERLINE_NONE,
             strikethrough: (bool) $font->isStrikethrough(),
             superscript: (bool) $font->isSuperScript(),
             subscript: (bool) $font->isSubScript(),

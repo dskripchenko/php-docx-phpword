@@ -34,3 +34,6 @@ jobs:
 
       - name: Run tests
         run: vendor/bin/phpunit
+
+      - name: Static analysis
+        run: vendor/bin/phpstan analyse --memory-limit=1G --no-progress

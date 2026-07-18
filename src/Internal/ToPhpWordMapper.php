@@ -113,15 +113,13 @@ final class ToPhpWordMapper
             foreach ($row->cells as $cell) {
                 $style = [];
                 $cellStyle = $cell->style;
-                if ($cellStyle instanceof CellStyle) {
-                    if ($cellStyle->gridSpan > 1) {
-                        $style['gridSpan'] = $cellStyle->gridSpan;
-                    }
-                    if ($cellStyle->vMergeContinue) {
-                        $style['vMerge'] = 'continue';
-                    } elseif ($cellStyle->rowSpan > 1) {
-                        $style['vMerge'] = 'restart';
-                    }
+                if ($cellStyle->gridSpan > 1) {
+                    $style['gridSpan'] = $cellStyle->gridSpan;
+                }
+                if ($cellStyle->vMergeContinue) {
+                    $style['vMerge'] = 'continue';
+                } elseif ($cellStyle->rowSpan > 1) {
+                    $style['vMerge'] = 'restart';
                 }
                 $wordCell = $wordTable->addCell(null, $style);
                 $this->mapBlocks($wordCell, $cell->children);

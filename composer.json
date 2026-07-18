@@ -3,7 +3,19 @@
     "description": "Typed bridge between PHPWord and dskripchenko/php-docx: export PhpWord objects to clean HTML, import HTML into PhpWord, read arbitrary DOCX straight into PhpWord models, detect template variables. The HTML layer for PHPWord pipelines.",
     "type": "library",
     "license": "MIT",
-    "keywords": ["phpword", "phpword-html", "phpword-to-html", "html-to-phpword", "docx", "docx-to-html", "html-to-docx", "word", "mail-merge", "mergefield", "template"],
+    "keywords": [
+        "phpword",
+        "phpword-html",
+        "phpword-to-html",
+        "html-to-phpword",
+        "docx",
+        "docx-to-html",
+        "html-to-docx",
+        "word",
+        "mail-merge",
+        "mergefield",
+        "template"
+    ],
     "homepage": "https://github.com/dskripchenko/php-docx-phpword",
     "authors": [
         {
@@ -17,7 +29,8 @@
         "phpoffice/phpword": "^1.3"
     },
     "require-dev": {
-        "phpunit/phpunit": "^11.5"
+        "phpunit/phpunit": "^11.5",
+        "phpstan/phpstan": "^2.0"
     },
     "autoload": {
         "psr-4": {
@@ -30,7 +43,8 @@
         }
     },
     "scripts": {
-        "test": "phpunit"
+        "test": "phpunit",
+        "stan": "phpstan analyse --memory-limit=1G"
     },
     "config": {
         "sort-packages": true
