@@ -7,6 +7,8 @@
 > import HTML into `PhpWord`, read arbitrary DOCX straight into PHPWord
 > models, detect template variables. Keep working in the API you know.
 
+> 🌐 **English** · [Deutsch](docs/de/README.md) · [Русский](docs/ru/README.md) · [中文](docs/zh/README.md)
+
 [![Tests](https://img.shields.io/github/actions/workflow/status/dskripchenko/php-docx-phpword/tests.yml?branch=main&label=tests&logo=github)](https://github.com/dskripchenko/php-docx-phpword/actions/workflows/tests.yml)
 [![Latest Version](https://img.shields.io/packagist/v/dskripchenko/php-docx-phpword?logo=packagist&logoColor=white)](https://packagist.org/packages/dskripchenko/php-docx-phpword)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
