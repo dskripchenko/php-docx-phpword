@@ -75,9 +75,9 @@ The bridge maps what **both** models can express:
 | headings 1–6 | charts, TOC, checkboxes, OLE |
 | tables incl. `gridSpan` / `vMerge` | tracked changes, comments |
 | bullet / numbered lists (nested) | footnotes/endnotes, OMML math |
-| hyperlinks, images, line/page breaks | form fields |
-| default headers/footers | first/even header variants, watermarks |
-| paragraph alignment, spacing, indents | section/page geometry details |
+| hyperlinks, images (in the line of text or floating: position, wrap, in front of or behind the text), line/page breaks | form fields |
+| sections (page size and orientation, margins, start) with default, first-page and even-page headers/footers | watermarks |
+| paragraph alignment, spacing, indents | section columns, page numbering, page borders |
 
 If a document leans on the right-hand column, the bridge will not
 pretend otherwise — content outside the set is dropped silently by

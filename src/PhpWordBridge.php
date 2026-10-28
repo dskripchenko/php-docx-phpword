@@ -22,8 +22,10 @@ use PhpOffice\PhpWord\PhpWord;
  * Works on the SHARED element set: paragraphs and runs (bold, italic,
  * underline, strikethrough, super/subscript, colour, size, font name),
  * headings 1–6, tables (gridSpan / vMerge), bullet and numbered lists
- * (nested), hyperlinks, images, line and page breaks, default
- * headers/footers, paragraph alignment/spacing/indent. Features outside
+ * (nested), hyperlinks, images (inline or floating), line and page
+ * breaks, sections with their page setup and start, default, first-page
+ * and even-page headers/footers, paragraph alignment/spacing/indent.
+ * Features outside
  * the set (charts, TOC, tracked changes, comments, footnotes, form
  * fields, named styles) are skipped, never guessed.
  */

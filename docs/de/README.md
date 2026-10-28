@@ -76,9 +76,9 @@ Die Brücke überträgt, was **beide** Modelle ausdrücken können:
 | Überschriften 1–6 | Diagramme, Inhaltsverzeichnis, Kontrollkästchen, OLE |
 | Tabellen inkl. `gridSpan` / `vMerge` | Änderungsverfolgung, Kommentare |
 | Aufzählungen und nummerierte Listen (auch verschachtelt) | Fuß- und Endnoten, OMML-Formeln |
-| Hyperlinks, Bilder, Zeilen- und Seitenumbrüche | Formularfelder |
-| Standard-Kopf-/Fußzeilen | eigene Varianten für erste und gerade Seiten, Wasserzeichen |
-| Absatzausrichtung, Abstände, Einzüge | Feinheiten der Abschnitts- und Seitengeometrie |
+| Hyperlinks, Bilder (im Text oder frei positioniert: Position, Umbruch, vor oder hinter dem Text), Zeilen- und Seitenumbrüche | Formularfelder |
+| Abschnitte (Seitengröße und -ausrichtung, Ränder, Abschnittsbeginn) mit Standard-Kopf-/Fußzeilen sowie Varianten für erste und gerade Seiten | Wasserzeichen |
+| Absatzausrichtung, Abstände, Einzüge | Spalten im Abschnitt, Seitennummerierung, Seitenrahmen |
 
 Stützt sich ein Dokument auf die rechte Spalte, tut die Brücke nicht so, als
 wäre alles in Ordnung: Inhalte außerhalb der gemeinsamen Menge werden bewusst

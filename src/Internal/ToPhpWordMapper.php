@@ -17,16 +17,23 @@ use Dskripchenko\PhpDocx\Element\Table as AstTable;
 use Dskripchenko\PhpDocx\Style\Alignment;
 use Dskripchenko\PhpDocx\Style\CellStyle;
 use Dskripchenko\PhpDocx\Style\ParagraphStyle;
+use Dskripchenko\PhpDocx\Section;
+use Dskripchenko\PhpDocx\Style\HorizontalAnchor;
+use Dskripchenko\PhpDocx\Style\ImageWrap;
 use Dskripchenko\PhpDocx\Style\RunStyle;
+use Dskripchenko\PhpDocx\Style\SectionStart;
+use Dskripchenko\PhpDocx\Style\VerticalAnchor;
 use PhpOffice\PhpWord\Element\AbstractContainer;
 use PhpOffice\PhpWord\PhpWord;
 use PhpOffice\PhpWord\SimpleType\Jc;
+use PhpOffice\PhpWord\Style\Image as ImageStyle;
 use PhpOffice\PhpWord\Style\ListItem as ListItemStyle;
 
 /**
- * php-docx AST → PhpWord object model, on the shared element set.
- * AST features outside PHPWord's model (text watermarks, first/even
- * header variants) are skipped, never guessed.
+ * php-docx AST → PhpWord object model, on the shared element set: a PhpWord
+ * section per php-docx section, with its page setup, start and headers and
+ * footers of every kind. AST features outside PHPWord's model (text
+ * watermarks) are skipped, never guessed.
  */
 final class ToPhpWordMapper
 {
@@ -37,19 +44,50 @@ final class ToPhpWordMapper
         for ($level = 1; $level <= 6; $level++) {
             $phpWord->addTitleStyle($level, ['bold' => true, 'size' => 20 - $level * 2]);
         }
-        $section = $phpWord->addSection();
-
-        if ($document->section->header !== []) {
-            $header = $section->addHeader();
-            $this->mapBlocks($header, $document->section->header);
+        foreach ($document->sections() as $i => $astSection) {
+            $section = $phpWord->addSection($this->sectionStyle($astSection, isFirst: $i === 0));
+            // The kinds share their names: default, first, even. A section
+            // without one shows the previous section's, in both models.
+            foreach ($astSection->allHeaders() as $type => $blocks) {
+                $this->mapBlocks($section->addHeader($type), $blocks);
+            }
+            foreach ($astSection->allFooters() as $type => $blocks) {
+                $this->mapBlocks($section->addFooter($type), $blocks);
+            }
+            if ($astSection->hasEvenPageHeaderOrFooter()) {
+                $phpWord->getSettings()->setEvenAndOddHeaders(true);
+            }
+            $this->mapBlocks($section, $astSection->body);
         }
-        if ($document->section->footer !== []) {
-            $footer = $section->addFooter();
-            $this->mapBlocks($footer, $document->section->footer);
-        }
-        $this->mapBlocks($section, $document->section->body);
 
         return $phpWord;
+    }
+
+    /**
+     * A section's page and start as PhpWord's section style (twips).
+     *
+     * @return array<string, mixed>
+     */
+    private function sectionStyle(Section $section, bool $isFirst): array
+    {
+        $page = $section->pageSetup;
+        $style = [
+            'pageSizeW' => $page->pageWidthTwips(),
+            'pageSizeH' => $page->pageHeightTwips(),
+            'orientation' => $page->effectiveOrientation()->value,
+            'marginTop' => $page->marginTopTwips,
+            'marginRight' => $page->marginRightTwips,
+            'marginBottom' => $page->marginBottomTwips,
+            'marginLeft' => $page->marginLeftTwips,
+            'headerHeight' => $page->headerOffsetTwips,
+            'footerHeight' => $page->footerOffsetTwips,
+        ];
+        // A new page is what a section does without a break type.
+        if (! $isFirst && $section->start !== SectionStart::NextPage) {
+            $style['breakType'] = $section->start->value;
+        }
+
+        return $style;
     }
 
     /**
@@ -97,10 +135,12 @@ final class ToPhpWordMapper
             } elseif ($child instanceof LineBreak) {
                 $textRun->addTextBreak();
             } elseif ($child instanceof Image) {
-                $textRun->addImage($this->dataUri($child), [
+                // The bytes themselves: PhpWord takes a string that is not a
+                // path for image data, and a data: URL for neither.
+                $textRun->addImage($child->binary, [
                     'width' => (int) round($child->widthEmu / 12700),
                     'height' => (int) round($child->heightEmu / 12700),
-                ]);
+                ] + $this->floating($child));
             }
         }
     }
@@ -241,8 +281,44 @@ final class ToPhpWordMapper
         return $out;
     }
 
-    private function dataUri(Image $image): string
+    /**
+     * A floating picture's position as PhpWord's image style (points, as its
+     * sizes); nothing for a picture in the line of text.
+     *
+     * @return array<string, mixed>
+     */
+    private function floating(Image $image): array
     {
-        return 'data:image/'.$image->format->value.';base64,'.base64_encode($image->binary);
+        $position = $image->effectivePosition();
+        if ($position === null) {
+            return [];
+        }
+
+        return [
+            'positioning' => ImageStyle::POSITION_RELATIVE,
+            'posHorizontalRel' => match ($position->horizontalFrom) {
+                HorizontalAnchor::Page => ImageStyle::POSITION_RELATIVE_TO_PAGE,
+                HorizontalAnchor::Margin => ImageStyle::POSITION_RELATIVE_TO_MARGIN,
+                HorizontalAnchor::Column => ImageStyle::POSITION_RELATIVE_TO_COLUMN,
+                HorizontalAnchor::Character => ImageStyle::POSITION_RELATIVE_TO_CHAR,
+            },
+            'posVerticalRel' => match ($position->verticalFrom) {
+                VerticalAnchor::Page => ImageStyle::POSITION_RELATIVE_TO_PAGE,
+                VerticalAnchor::Margin => ImageStyle::POSITION_RELATIVE_TO_MARGIN,
+                VerticalAnchor::Paragraph => ImageStyle::POSITION_RELATIVE_TO_TEXT,
+                VerticalAnchor::Line => ImageStyle::POSITION_RELATIVE_TO_LINE,
+            },
+            // The alignments share their names; without one, the offset.
+            'posHorizontal' => $position->horizontalAlign->value ?? ImageStyle::POSITION_ABSOLUTE,
+            'posVertical' => $position->verticalAlign->value ?? ImageStyle::POSITION_ABSOLUTE,
+            'marginLeft' => round($position->xEmu / 12700, 2),
+            'marginTop' => round($position->yEmu / 12700, 2),
+            'wrappingStyle' => match ($position->wrap) {
+                ImageWrap::None => $position->behindText ? ImageStyle::WRAPPING_STYLE_BEHIND : ImageStyle::WRAPPING_STYLE_INFRONT,
+                ImageWrap::Square => ImageStyle::WRAPPING_STYLE_SQUARE,
+                ImageWrap::TopAndBottom => 'topAndBottom',
+            },
+        ];
     }
+
 }
