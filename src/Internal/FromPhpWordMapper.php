@@ -23,7 +23,16 @@ use Dskripchenko\PhpDocx\Section;
 use Dskripchenko\PhpDocx\Style\Alignment;
 use Dskripchenko\PhpDocx\Style\CellStyle;
 use Dskripchenko\PhpDocx\Style\ParagraphStyle;
+use Dskripchenko\PhpDocx\Style\HorizontalAnchor;
+use Dskripchenko\PhpDocx\Style\ImagePosition;
+use Dskripchenko\PhpDocx\Style\ImageWrap;
+use Dskripchenko\PhpDocx\Style\Orientation;
+use Dskripchenko\PhpDocx\Style\PageSetup;
+use Dskripchenko\PhpDocx\Style\PaperSize;
+use Dskripchenko\PhpDocx\Style\PositionAlign;
 use Dskripchenko\PhpDocx\Style\RunStyle;
+use Dskripchenko\PhpDocx\Style\SectionStart;
+use Dskripchenko\PhpDocx\Style\VerticalAnchor;
 use PhpOffice\PhpWord\Element\AbstractElement;
 use PhpOffice\PhpWord\Element\Cell;
 use PhpOffice\PhpWord\Element\Link;
@@ -41,7 +50,9 @@ use PhpOffice\PhpWord\PhpWord;
 use PhpOffice\PhpWord\SimpleType\Jc;
 use PhpOffice\PhpWord\Style\Font;
 use PhpOffice\PhpWord\Style\ListItem as ListItemStyle;
+use PhpOffice\PhpWord\Style\Image as WordImageStyle;
 use PhpOffice\PhpWord\Style\Paragraph as WordParagraphStyle;
+use PhpOffice\PhpWord\Style\Section as WordSectionStyle;
 
 /**
  * PhpWord object model → php-docx AST, on the shared element set (see
@@ -52,21 +63,64 @@ final class FromPhpWordMapper
 {
     public function map(PhpWord $phpWord): Document
     {
-        $body = [];
-        $header = [];
-        $footer = [];
-
+        $sections = [];
         foreach ($phpWord->getSections() as $section) {
+            // Headers and footers by kind: default, first, even (PhpWord's names too).
+            $headers = ['default' => [], 'first' => [], 'even' => []];
             foreach ($section->getHeaders() as $h) {
-                $header = array_merge($header, $this->mapElements($h->getElements()));
+                $type = array_key_exists($h->getType(), $headers) ? $h->getType() : 'default';
+                $headers[$type] = array_merge($headers[$type], $this->mapElements($h->getElements()));
             }
+            $footers = ['default' => [], 'first' => [], 'even' => []];
             foreach ($section->getFooters() as $f) {
-                $footer = array_merge($footer, $this->mapElements($f->getElements()));
+                $type = array_key_exists($f->getType(), $footers) ? $f->getType() : 'default';
+                $footers[$type] = array_merge($footers[$type], $this->mapElements($f->getElements()));
             }
-            $body = array_merge($body, $this->mapElements($section->getElements()));
+            $style = $section->getStyle() ?? new WordSectionStyle;
+            $sections[] = new Section(
+                body: $this->mapElements($section->getElements()),
+                header: $headers['default'],
+                footer: $footers['default'],
+                pageSetup: $this->pageSetup($style),
+                firstHeader: $headers['first'],
+                firstFooter: $footers['first'],
+                evenHeader: $headers['even'],
+                evenFooter: $footers['even'],
+                start: SectionStart::tryFrom((string) $style->getBreakType()) ?? SectionStart::NextPage,
+            );
+        }
+        if ($sections === []) {
+            $sections[] = new Section(body: []);
         }
 
-        return new Document(new Section(body: $body, header: $header, footer: $footer));
+        return new Document($sections[0], followingSections: array_slice($sections, 1));
+    }
+
+    /** A PhpWord section's page (twips): a preset paper size when one matches, else the size as it is. */
+    private function pageSetup(WordSectionStyle $style): PageSetup
+    {
+        $width = (int) round((float) $style->getPageSizeW());
+        $height = (int) round((float) $style->getPageSizeH());
+        $paper = null;
+        foreach (PaperSize::cases() as $size) {
+            if (abs($size->widthTwips() - min($width, $height)) <= 2 && abs($size->heightTwips() - max($width, $height)) <= 2) {
+                $paper = $size;
+                break;
+            }
+        }
+
+        return new PageSetup(
+            paperSize: $paper ?? PaperSize::A4,
+            orientation: $style->getOrientation() === WordSectionStyle::ORIENTATION_LANDSCAPE ? Orientation::Landscape : Orientation::Portrait,
+            marginTopTwips: (int) round((float) $style->getMarginTop()),
+            marginRightTwips: (int) round((float) $style->getMarginRight()),
+            marginBottomTwips: (int) round((float) $style->getMarginBottom()),
+            marginLeftTwips: (int) round((float) $style->getMarginLeft()),
+            headerOffsetTwips: (int) round((float) $style->getHeaderHeight()),
+            footerOffsetTwips: (int) round((float) $style->getFooterHeight()),
+            widthTwips: $paper === null && $width > 0 && $height > 0 ? $width : null,
+            heightTwips: $paper === null && $width > 0 && $height > 0 ? $height : null,
+        );
     }
 
     /**
@@ -207,7 +261,57 @@ final class FromPhpWordMapper
         $wPt = (float) ($style?->getWidth() ?? 96.0);
         $hPt = (float) ($style?->getHeight() ?? 96.0);
 
-        return new Image($binary, $format, (int) round($wPt * 12700), (int) round($hPt * 12700));
+        return new Image(
+            $binary,
+            $format,
+            (int) round($wPt * 12700),
+            (int) round($hPt * 12700),
+            position: $style === null ? null : $this->floating($style),
+        );
+    }
+
+    /**
+     * A floating picture's place (PhpWord writes a picture floating unless
+     * its wrap is inline); null for a picture in the line of text. Origins
+     * php-docx has no case for are read as the nearest one: the margin areas
+     * as the margin, the text as the paragraph.
+     */
+    private function floating(WordImageStyle $style): ?ImagePosition
+    {
+        // PhpWord leaves these null until set, its docblocks say string.
+        $wrap = (string) $style->getWrappingStyle();
+        if ($wrap === '' || $wrap === WordImageStyle::WRAPPING_STYLE_INLINE) {
+            return null;
+        }
+        $horizontal = PositionAlign::tryFrom((string) $style->getPosHorizontal());
+        $vertical = PositionAlign::tryFrom((string) $style->getPosVertical());
+
+        return new ImagePosition(
+            horizontalFrom: match ((string) $style->getPosHorizontalRel()) {
+                WordImageStyle::POSITION_RELATIVE_TO_PAGE => HorizontalAnchor::Page,
+                WordImageStyle::POSITION_RELATIVE_TO_COLUMN, '' => HorizontalAnchor::Column,
+                WordImageStyle::POSITION_RELATIVE_TO_CHAR => HorizontalAnchor::Character,
+                default => HorizontalAnchor::Margin,
+            },
+            xEmu: (int) round((float) $style->getMarginLeft() * 12700),
+            verticalFrom: match ((string) $style->getPosVerticalRel()) {
+                WordImageStyle::POSITION_RELATIVE_TO_PAGE => VerticalAnchor::Page,
+                WordImageStyle::POSITION_RELATIVE_TO_LINE => VerticalAnchor::Line,
+                WordImageStyle::POSITION_RELATIVE_TO_TEXT, '' => VerticalAnchor::Paragraph,
+                default => VerticalAnchor::Margin,
+            },
+            yEmu: (int) round((float) $style->getMarginTop() * 12700),
+            // Only the alignments of their own axis: PhpWord takes left/right
+            // for vertical ones too, php-docx refuses them.
+            horizontalAlign: in_array($horizontal, [PositionAlign::Top, PositionAlign::Bottom], true) ? null : $horizontal,
+            verticalAlign: in_array($vertical, [PositionAlign::Left, PositionAlign::Right], true) ? null : $vertical,
+            behindText: $wrap === WordImageStyle::WRAPPING_STYLE_BEHIND,
+            wrap: match ($wrap) {
+                WordImageStyle::WRAPPING_STYLE_SQUARE, WordImageStyle::WRAPPING_STYLE_TIGHT, 'through' => ImageWrap::Square,
+                'topAndBottom' => ImageWrap::TopAndBottom,
+                default => ImageWrap::None,
+            },
+        );
     }
 
     private function mapTable(WordTable $el): AstTable
